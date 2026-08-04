@@ -135,7 +135,7 @@ class SettingsTab extends StatelessWidget {
                     onChanged: (val) =>
                         appState.setShowDownloadNotifications(val),
                   ),
-                  _buildSliderTile(
+                  _buildTile(
                     context,
                     icon: Icons.av_timer_outlined,
                     accent: scheme.tertiary,
@@ -143,12 +143,10 @@ class SettingsTab extends StatelessWidget {
                     subtitle: appState.speedLimitCap == 0
                         ? 'Unlimited'
                         : '${appState.speedLimitCap} KB/s',
-                    value: appState.speedLimitCap.toDouble(),
-                    min: 0,
-                    max: 10000,
-                    divisions: 20,
-                    onChanged: (val) =>
-                        appState.setSpeedLimitCap(val.toInt()),
+                    trailing: _SpeedLimitTrailing(
+                      value: appState.speedLimitCap,
+                      onChanged: (val) => appState.setSpeedLimitCap(val),
+                    ),
                   ),
                 ],
               ),
@@ -863,6 +861,101 @@ class SettingsTab extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const SecuritySetupScreen()),
+    );
+  }
+}
+
+class _SpeedLimitTrailing extends StatefulWidget {
+  const _SpeedLimitTrailing({required this.value, required this.onChanged});
+
+  /// Current speed limit in KB/s. 0 = unlimited.
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  State<_SpeedLimitTrailing> createState() => _SpeedLimitTrailingState();
+}
+
+class _SpeedLimitTrailingState extends State<_SpeedLimitTrailing> {
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(
+        text: widget.value == 0 ? '' : '${widget.value}');
+  }
+
+  @override
+  void didUpdateWidget(covariant _SpeedLimitTrailing oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != oldWidget.value) {
+      final current = int.tryParse(_ctrl.text);
+      if (current == null || current != widget.value) {
+        _ctrl.text = widget.value == 0 ? '' : '${widget.value}';
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    final text = _ctrl.text.trim();
+    if (text.isEmpty) {
+      widget.onChanged(0);
+      return;
+    }
+    final v = int.tryParse(text);
+    if (v == null) return;
+    widget.onChanged(v.clamp(0, 100000));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 104,
+          child: Slider(
+            value: (widget.value.toDouble()).clamp(0, 10000),
+            min: 0,
+            max: 10000,
+            divisions: 20,
+            onChanged: (val) => widget.onChanged(val.toInt()),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Container(
+          width: 62,
+          height: 34,
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(
+              color: cs.outlineVariant.withValues(alpha: 0.4),
+            ),
+          ),
+          child: TextField(
+            controller: _ctrl,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12.5, color: cs.onSurface),
+            decoration: const InputDecoration(
+              hintText: 'KB/s',
+              isDense: true,
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            ),
+            onSubmitted: (_) => _commit(),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -97,6 +97,9 @@ class DownloadItem {
   int redirectCount;
   String? resolvedUrl;
 
+  // Per-download speed limit in KB/s. Null = use the global app limit.
+  int? speedLimitKbps;
+
   // Server metadata used to verify file identity across link refreshes
   String? etag;
   String? mimeType;
@@ -133,6 +136,7 @@ class DownloadItem {
     this.calculatedSha256,
     this.redirectCount = 0,
     this.resolvedUrl,
+    this.speedLimitKbps,
     this.etag,
     this.mimeType,
     this.lastModified,
@@ -225,6 +229,7 @@ class DownloadItem {
         calculatedSha256: calculatedSha256,
         redirectCount: redirectCount,
         resolvedUrl: resolvedUrl,
+        speedLimitKbps: speedLimitKbps,
         etag: etag,
         mimeType: mimeType,
         lastModified: lastModified,
@@ -259,6 +264,7 @@ class DownloadItem {
     if (calculatedSha256 != null) 'calculatedSha256': calculatedSha256,
     'redirectCount': redirectCount,
     if (resolvedUrl != null) 'resolvedUrl': resolvedUrl,
+    if (speedLimitKbps != null) 'speedLimitKbps': speedLimitKbps,
     if (etag != null) 'etag': etag,
     if (mimeType != null) 'mimeType': mimeType,
     if (lastModified != null) 'lastModified': lastModified,
@@ -294,6 +300,7 @@ class DownloadItem {
       calculatedSha256: json['calculatedSha256'],
       redirectCount: json['redirectCount'] ?? 0,
       resolvedUrl: json['resolvedUrl'],
+      speedLimitKbps: json['speedLimitKbps'],
       etag: json['etag'],
       mimeType: json['mimeType'],
       lastModified: json['lastModified'],

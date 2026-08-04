@@ -423,6 +423,17 @@ class DownloadProvider with ChangeNotifier {
     _syncLiveActivityState();
   }
 
+  /// Sets a per-download speed limit in KB/s. Pass null to remove the
+  /// custom limit and fall back to the global app limit.
+  Future<void> setItemSpeedLimit(String id, int? kbps) async {
+    final index = _queue.indexWhere((i) => i.id == id);
+    if (index == -1) return;
+    final item = _queue[index];
+    item.speedLimitKbps = kbps;
+    await DatabaseHelper().updateDownload(item);
+    notifyListeners();
+  }
+
   void stop(String id) {
     if (!_queue.any((i) => i.id == id)) return;
     final item = _queue.firstWhere((i) => i.id == id);
@@ -1376,8 +1387,16 @@ class DownloadProvider with ChangeNotifier {
     }
     final stream = response.data!.stream;
 
+    // Speed limit: per-download value wins, otherwise the global app limit.
+    final prefs = await SharedPreferences.getInstance();
+    final int globalLimitKbps = prefs.getInt('speedLimitCap') ?? 0;
+
     DateTime lastUpdate = DateTime.now();
     int bytesSinceUpdate = 0;
+
+    // Throttle window (token bucket). Window resets on every progress tick.
+    final Stopwatch limitWatch = Stopwatch()..start();
+    int limitWindowBytes = 0;
 
     await for (final chunk in stream) {
       if (cancelToken.isCancelled) break;
@@ -1385,12 +1404,30 @@ class DownloadProvider with ChangeNotifier {
       item.downloadedBytes += chunk.length;
       bytesSinceUpdate += chunk.length;
 
+      // Per-download limit is read live so changes apply immediately.
+      final int limitKbps = item.speedLimitKbps ?? globalLimitKbps;
+      if (limitKbps > 0) {
+        limitWindowBytes += chunk.length;
+        final limitBytesPerMs = limitKbps * 1024 / 1000;
+        final elapsedMs = limitWatch.elapsedMilliseconds;
+        final allowedBytes = limitBytesPerMs * elapsedMs;
+        if (limitWindowBytes > allowedBytes) {
+          final overBytes = limitWindowBytes - allowedBytes;
+          final delayMs =
+              (overBytes / limitBytesPerMs).ceil().clamp(1, 2000);
+          await Future.delayed(Duration(milliseconds: delayMs));
+        }
+      }
+
       final now = DateTime.now();
       if (now.difference(lastUpdate).inMilliseconds >= 500) {
         _updateProgress(
             item, bytesSinceUpdate, now.difference(lastUpdate).inMilliseconds);
         lastUpdate = now;
         bytesSinceUpdate = 0;
+        // Reset the throttle window to avoid accumulating error.
+        limitWatch.reset();
+        limitWindowBytes = 0;
       }
     }
     raf.closeSync();

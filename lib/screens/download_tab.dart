@@ -1006,6 +1006,21 @@ class _DownloadTabState extends State<DownloadTab> {
           CupertinoActionSheetAction(
             onPressed: () {
               Navigator.pop(ctx);
+              HapticService.light();
+              _showSpeedLimitDialog(context, dlProvider, item);
+            },
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.speed, color: CupertinoColors.systemOrange, size: 22),
+                SizedBox(width: 12),
+                Text('Speed Limit'),
+              ],
+            ),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(ctx);
               Clipboard.setData(ClipboardData(text: item.url));
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -1028,6 +1043,72 @@ class _DownloadTabState extends State<DownloadTab> {
           onPressed: () => Navigator.pop(ctx),
           child: const Text('Cancel'),
         ),
+      ),
+    );
+  }
+
+  void _showSpeedLimitDialog(
+      BuildContext context, DownloadProvider dlProvider, DownloadItem item) {
+    final ctrl = TextEditingController(
+        text: item.speedLimitKbps != null ? '${item.speedLimitKbps}' : '');
+
+    void apply(int? kbps) {
+      dlProvider.setItemSpeedLimit(item.id, kbps);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(kbps == null
+                ? 'Speed limit removed for this download'
+                : 'Speed limit set to $kbps KB/s for this download'),
+          ),
+        );
+      }
+    }
+
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Speed Limit'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Limit the download speed for this file only.\n0 or empty = unlimited (uses global setting).',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            CupertinoTextField(
+              controller: ctrl,
+              placeholder: 'KB/s',
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              clearButtonMode: OverlayVisibilityMode.editing,
+            ),
+          ],
+        ),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              apply(null);
+            },
+            child: const Text('Unlimited'),
+          ),
+          CupertinoDialogAction(
+            child: const Text('Apply'),
+            onPressed: () {
+              final v = int.tryParse(ctrl.text.trim());
+              Navigator.pop(ctx);
+              apply(v?.clamp(0, 100000));
+            },
+          ),
+        ],
       ),
     );
   }

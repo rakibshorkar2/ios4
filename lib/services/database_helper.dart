@@ -20,7 +20,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'dirxplore_downloads.db');
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -56,6 +56,7 @@ class DatabaseHelper {
         calculatedSha256 TEXT,
         redirectCount INTEGER DEFAULT 0,
         resolvedUrl TEXT,
+        speedLimitKbps INTEGER,
         etag TEXT,
         mimeType TEXT,
         lastModified TEXT,
@@ -89,6 +90,9 @@ class DatabaseHelper {
       await db.execute('ALTER TABLE downloads ADD COLUMN mimeType TEXT');
       await db.execute('ALTER TABLE downloads ADD COLUMN lastModified TEXT');
       await db.execute('ALTER TABLE downloads ADD COLUMN contentDisposition TEXT');
+    }
+    if (oldVersion < 7) {
+      await db.execute('ALTER TABLE downloads ADD COLUMN speedLimitKbps INTEGER');
     }
   }
 
