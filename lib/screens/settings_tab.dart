@@ -10,7 +10,7 @@ class SettingsTab extends StatelessWidget {
 
   static const String _appName = 'DirXplore';
   static const String _developerName = 'RAKIB';
-  static const String _appVersion = 'V3.0.1';
+  static const String _appVersion = 'V3.0.2';
 
   @override
   Widget build(BuildContext context) {
@@ -878,6 +878,7 @@ class _SpeedLimitTrailing extends StatefulWidget {
 
 class _SpeedLimitTrailingState extends State<_SpeedLimitTrailing> {
   late final TextEditingController _ctrl;
+  bool _invalid = false;
 
   @override
   void initState() {
@@ -894,6 +895,7 @@ class _SpeedLimitTrailingState extends State<_SpeedLimitTrailing> {
       if (current == null || current != widget.value) {
         _ctrl.text = widget.value == 0 ? '' : '${widget.value}';
       }
+      _invalid = false;
     }
   }
 
@@ -906,22 +908,42 @@ class _SpeedLimitTrailingState extends State<_SpeedLimitTrailing> {
   void _commit() {
     final text = _ctrl.text.trim();
     if (text.isEmpty) {
+      _invalid = false;
       widget.onChanged(0);
+      _showAppliedFeedback('Unlimited');
       return;
     }
     final v = int.tryParse(text);
-    if (v == null) return;
-    widget.onChanged(v.clamp(0, 100000));
+    if (v == null) {
+      setState(() => _invalid = true);
+      return;
+    }
+    final clamped = v.clamp(0, 100000);
+    _invalid = false;
+    widget.onChanged(clamped);
+    _showAppliedFeedback(clamped == 0 ? 'Unlimited' : '$clamped KB/s');
+  }
+
+  void _showAppliedFeedback(String label) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('Speed limit applied: $label'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Row(
+    return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         SizedBox(
-          width: 104,
+          width: 176,
           child: Slider(
             value: (widget.value.toDouble()).clamp(0, 10000),
             min: 0,
@@ -930,30 +952,66 @@ class _SpeedLimitTrailingState extends State<_SpeedLimitTrailing> {
             onChanged: (val) => widget.onChanged(val.toInt()),
           ),
         ),
-        const SizedBox(width: 4),
-        Container(
-          width: 62,
-          height: 34,
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(9),
-            border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: 0.4),
+        const SizedBox(height: 2),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 74,
+              height: 34,
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                  color: _invalid
+                      ? cs.error
+                      : cs.outlineVariant.withValues(alpha: 0.4),
+                ),
+              ),
+              child: TextField(
+                controller: _ctrl,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12.5, color: cs.onSurface),
+                decoration: const InputDecoration(
+                  hintText: 'KB/s',
+                  isDense: true,
+                  border: InputBorder.none,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                ),
+                onChanged: (_) {
+                  if (_invalid) setState(() => _invalid = false);
+                },
+                onSubmitted: (_) => _commit(),
+              ),
             ),
-          ),
-          child: TextField(
-            controller: _ctrl,
-            keyboardType: TextInputType.number,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12.5, color: cs.onSurface),
-            decoration: const InputDecoration(
-              hintText: 'KB/s',
-              isDense: true,
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            const SizedBox(width: 6),
+            SizedBox(
+              height: 34,
+              child: FilledButton(
+                onPressed: _commit,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  backgroundColor: cs.primaryContainer,
+                  foregroundColor: cs.onPrimaryContainer,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                ),
+                child: Text(
+                  'Apply',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onPrimaryContainer,
+                  ),
+                ),
+              ),
             ),
-            onSubmitted: (_) => _commit(),
-          ),
+          ],
         ),
       ],
     );

@@ -1294,12 +1294,17 @@ class DownloadProvider with ChangeNotifier {
 
       await _downloadSingle(item, existingBytes, cancelToken);
 
+      // Cancelled by the user (pause/stop/clear/link change) while streaming.
+      // pause() already set the item status — never mark a cancelled
+      // download as completed.
+      if (cancelToken.isCancelled) {
+        return;
+      }
+
       // Completion only after the final byte has been written to disk.
       // A stream that ended early (or a server that lied about the size)
       // is an interruption, never a completion.
-      if (!cancelToken.isCancelled &&
-          item.totalBytes > 0 &&
-          item.downloadedBytes < item.totalBytes) {
+      if (item.totalBytes > 0 && item.downloadedBytes < item.totalBytes) {
         throw const _DownloadInterruptedException(
             'Download interrupted before completion.');
       }
@@ -1321,6 +1326,14 @@ class DownloadProvider with ChangeNotifier {
         }).catchError((e) { debugPrint('Channel method error: $e'); });
       }
     } catch (e) {
+      if (cancelToken.isCancelled) {
+        // The user cancelled this download (pause/stop/clear/link change).
+        // dio aborts the underlying request, which surfaces as a raw
+        // HttpException, NOT a DioException — so it would fall into the
+        // auto-retry path and restart the download. Never retry or mark a
+        // cancelled download as failed/completed.
+        return;
+      }
       _handleDownloadError(item, e);
     } finally {
       if (!_isIOS) {
@@ -1394,9 +1407,11 @@ class DownloadProvider with ChangeNotifier {
     DateTime lastUpdate = DateTime.now();
     int bytesSinceUpdate = 0;
 
-    // Throttle window (token bucket). Window resets on every progress tick.
-    final Stopwatch limitWatch = Stopwatch()..start();
-    int limitWindowBytes = 0;
+    // Token-bucket throttle. Tokens refill at the limit rate and every chunk
+    // must be "paid" with tokens. Delays apply natural backpressure to the
+    // stream so the average rate stays at the limit.
+    double bucketBytes = 0;
+    final Stopwatch bucketWatch = Stopwatch()..start();
 
     await for (final chunk in stream) {
       if (cancelToken.isCancelled) break;
@@ -1407,15 +1422,21 @@ class DownloadProvider with ChangeNotifier {
       // Per-download limit is read live so changes apply immediately.
       final int limitKbps = item.speedLimitKbps ?? globalLimitKbps;
       if (limitKbps > 0) {
-        limitWindowBytes += chunk.length;
-        final limitBytesPerMs = limitKbps * 1024 / 1000;
-        final elapsedMs = limitWatch.elapsedMilliseconds;
-        final allowedBytes = limitBytesPerMs * elapsedMs;
-        if (limitWindowBytes > allowedBytes) {
-          final overBytes = limitWindowBytes - allowedBytes;
-          final delayMs =
-              (overBytes / limitBytesPerMs).ceil().clamp(1, 2000);
-          await Future.delayed(Duration(milliseconds: delayMs));
+        final double limitBytesPerMs = limitKbps * 1024 / 1000;
+        bucketBytes += limitBytesPerMs * bucketWatch.elapsedMilliseconds;
+        bucketWatch.reset();
+        // Cap surplus so a long network lull can't burst past the limit.
+        final double maxBucket = limitBytesPerMs * 1000;
+        if (bucketBytes > maxBucket) {
+          bucketBytes = maxBucket;
+        }
+        if (bucketBytes < chunk.length) {
+          final waitMs =
+              ((chunk.length - bucketBytes) / limitBytesPerMs).ceil();
+          await Future.delayed(Duration(milliseconds: waitMs));
+          bucketBytes = 0;
+        } else {
+          bucketBytes -= chunk.length;
         }
       }
 
@@ -1425,9 +1446,6 @@ class DownloadProvider with ChangeNotifier {
             item, bytesSinceUpdate, now.difference(lastUpdate).inMilliseconds);
         lastUpdate = now;
         bytesSinceUpdate = 0;
-        // Reset the throttle window to avoid accumulating error.
-        limitWatch.reset();
-        limitWindowBytes = 0;
       }
     }
     raf.closeSync();
