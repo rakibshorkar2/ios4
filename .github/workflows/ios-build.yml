@@ -1,0 +1,43 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    name: Build iOS
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - run: flutter pub get
+
+      - run: flutter build ios --release --no-codesign
+
+      - name: Package .app into .ipa
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -qr build/ios/iphoneos/Runner.ipa Payload/
+          rm -rf Payload
+
+      - uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: ios-build-output
+          path: |
+            build/ios/iphoneos/Runner.ipa
+            build/ios/iphoneos/Runner.app.dSYM.zip
+          retention-days: 7
