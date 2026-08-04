@@ -18,7 +18,6 @@ class AppState with ChangeNotifier {
   // Added Phase 1-4 Toggles
   bool _trueAmoledDark = false;
   bool _showDownloadNotifications = true;
-  int _speedLimitCap = 0; // 0 means no limit (in KB/s)
   bool _keepScreenAwake = false;
   int _keepScreenAwakeTimerMinutes = 0;
   Timer? _keepAwakeTimer;
@@ -60,7 +59,6 @@ class AppState with ChangeNotifier {
   // Added Getters
   bool get trueAmoledDark => _trueAmoledDark;
   bool get showDownloadNotifications => _showDownloadNotifications;
-  int get speedLimitCap => _speedLimitCap;
   bool get keepScreenAwake => _keepScreenAwake;
   int get keepScreenAwakeTimerMinutes => _keepScreenAwakeTimerMinutes;
   bool get smartFolderRouting => _smartFolderRouting;
@@ -129,7 +127,6 @@ class AppState with ChangeNotifier {
     _trueAmoledDark = prefs.getBool('trueAmoledDark') ?? true;
     _showDownloadNotifications =
         prefs.getBool('showDownloadNotifications') ?? true;
-    _speedLimitCap = prefs.getInt('speedLimitCap') ?? 0;
     _keepScreenAwake = prefs.getBool('keepScreenAwake') ?? false;
     _keepScreenAwakeTimerMinutes = prefs.getInt('keepScreenAwakeTimerMinutes') ?? 0;
     _smartFolderRouting = prefs.getBool('smartFolderRouting') ?? false;
@@ -229,13 +226,6 @@ class AppState with ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('showDownloadNotifications', val);
-  }
-
-  Future<void> setSpeedLimitCap(int val) async {
-    _speedLimitCap = val;
-    notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('speedLimitCap', val);
   }
 
   Future<void> setKeepScreenAwake(bool val) async {

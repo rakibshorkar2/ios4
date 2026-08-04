@@ -1400,10 +1400,7 @@ class DownloadProvider with ChangeNotifier {
     }
     final stream = response.data!.stream;
 
-    // Speed limit: per-download value wins, otherwise the global app limit.
-    final prefs = await SharedPreferences.getInstance();
-    final int globalLimitKbps = prefs.getInt('speedLimitCap') ?? 0;
-
+    // Speed limit: applied only when the per-download value is set.
     DateTime lastUpdate = DateTime.now();
     int bytesSinceUpdate = 0;
 
@@ -1420,7 +1417,7 @@ class DownloadProvider with ChangeNotifier {
       bytesSinceUpdate += chunk.length;
 
       // Per-download limit is read live so changes apply immediately.
-      final int limitKbps = item.speedLimitKbps ?? globalLimitKbps;
+      final int limitKbps = item.speedLimitKbps ?? 0;
       if (limitKbps > 0) {
         final double limitBytesPerMs = limitKbps * 1024 / 1000;
         bucketBytes += limitBytesPerMs * bucketWatch.elapsedMilliseconds;
